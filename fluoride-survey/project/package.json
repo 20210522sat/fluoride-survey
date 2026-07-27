@@ -1,9 +1,0 @@
-{
-  "name": "fluoride-survey",
-  "version": "1.0.0",
-  "private": true,
-  "description": "牙膏氟濃度問卷調查 - 前端 + Vercel Serverless API + Supabase",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.0"
-  }
-}
