@@ -1,0 +1,8 @@
+cd D:\USER\Desktop\claude檔案\Fluent\fluoride-survey\project
+git init
+git add .
+git commit -m "init"
+git branch -M main
+git remote add origin https://github.com/你的帳號/fluoride-survey.git
+git push -u origin main
+
