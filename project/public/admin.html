@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>問卷管理後台</title>
+<style>
+  :root{
+    --bg:#f5f3ef; --card:#ffffff; --accent:#2f7a5f; --accent-dark:#20573f;
+    --text:#2b2b2b; --muted:#767267; --border:#e2ded4;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    background:var(--bg);color:var(--text);padding:24px 16px 80px;
+  }
+  .wrap{max-width:900px;margin:0 auto;}
+  h1{color:var(--accent-dark);font-size:1.4rem;}
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    padding:22px 20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,0.03);
+  }
+  input[type=password]{
+    width:100%;padding:12px 14px;border:1px solid var(--border);
+    border-radius:10px;font-size:1rem;font-family:inherit;margin-bottom:12px;
+  }
+  button{
+    padding:12px 20px;background:var(--accent);color:#fff;border:none;
+    border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;
+  }
+  button:hover{background:var(--accent-dark);}
+  button:disabled{background:#b9c9bf;cursor:not-allowed;}
+  table{width:100%;border-collapse:collapse;font-size:0.9rem;}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:left;}
+  th{background:#f0efe9;}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .error{color:#c0392b;font-size:0.85rem;display:none;margin-bottom:10px;}
+  .muted{color:var(--muted);font-size:0.85rem;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>問卷管理後台</h1>
+
+  <div class="card" id="loginCard">
+    <p class="muted">請輸入管理者密碼以查看所有回覆。</p>
+    <input type="password" id="pwInput" placeholder="密碼">
+    <div class="error" id="loginErr">密碼錯誤，請再試一次</div>
+    <button id="loginBtn">登入</button>
+  </div>
+
+  <div class="card" id="dataCard" style="display:none;">
+    <div class="toolbar">
+      <span id="countText" class="muted">共 0 筆回覆</span>
+      <div>
+        <button id="refreshBtn" type="button">重新整理</button>
+        <button id="exportBtn" type="button">匯出 CSV</button>
+      </div>
+    </div>
+    <div id="tableWrap">載入中...</div>
+  </div>
+</div>
+
+<script>
+let adminPassword = null;
+let currentData = [];
+
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const pw = document.getElementById('pwInput').value;
+  if(!pw) return;
+  await loadData(pw);
+});
+document.getElementById('pwInput').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') document.getElementById('loginBtn').click();
+});
+
+async function loadData(pw){
+  const loginErr = document.getElementById('loginErr');
+  loginErr.style.display = 'none';
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.disabled = true;
+  loginBtn.textContent = '驗證中...';
+
+  try{
+    const res = await fetch('/api/responses', {
+      headers: { 'x-admin-password': pw }
+    });
+    if(res.status === 401){
+      loginErr.style.display = 'block';
+      loginBtn.disabled = false;
+      loginBtn.textContent = '登入';
+      return;
+    }
+    if(!res.ok) throw new Error('load failed');
+    const data = await res.json();
+    adminPassword = pw;
+    currentData = data.responses || [];
+    document.getElementById('loginCard').style.display = 'none';
+    document.getElementById('dataCard').style.display = 'block';
+    renderTable();
+  }catch(err){
+    console.error(err);
+    loginErr.textContent = '載入失敗，請稍後再試';
+    loginErr.style.display = 'block';
+    loginBtn.disabled = false;
+    loginBtn.textContent = '登入';
+  }
+}
+
+function renderTable(){
+  document.getElementById('countText').textContent = `共 ${currentData.length} 筆回覆`;
+  if(currentData.length === 0){
+    document.getElementById('tableWrap').innerHTML = '<p class="muted">目前尚無資料。</p>';
+    return;
+  }
+  let html = `<table><thead><tr>
+    <th>#</th><th>姓名</th><th>氟濃度</th><th>Q3</th><th>Q4</th><th>時間</th>
+  </tr></thead><tbody>`;
+  currentData.forEach((r,i)=>{
+    const t = (r.submitted_at || '').replace('T',' ').slice(0,19);
+    html += `<tr><td>${i+1}</td><td>${escapeHtml(r.q1_name)}</td><td>${escapeHtml(r.q2_fluoride)}</td><td>${escapeHtml(r.q3_image)}</td><td>${escapeHtml(r.q4_image)}</td><td>${t}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+}
+
+function escapeHtml(s){
+  if(s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+document.getElementById('refreshBtn').addEventListener('click', ()=>{
+  if(adminPassword) loadData(adminPassword);
+});
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  if(currentData.length === 0) return;
+  const headers = ['姓名','氟濃度','Q3','Q4','時間'];
+  const rows = currentData.map(r => [
+    r.q1_name, r.q2_fluoride, r.q3_image, r.q4_image, r.submitted_at
+  ]);
+  let csv = '\uFEFF' + headers.join(',') + '\n';
+  rows.forEach(row=>{
+    csv += row.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '問卷回覆_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
